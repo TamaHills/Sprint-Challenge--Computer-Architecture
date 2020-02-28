@@ -10,6 +10,9 @@ PUSH = 5
 POP = 6
 CALL = 16
 RET = 17
+JEQ = 21
+JNE = 22
+JMP = 20
 SP = 7
 
 
@@ -35,6 +38,9 @@ class CPU:
         self.branch_table[POP] = self.POP
         self.branch_table[CALL] = self.CALL
         self.branch_table[RET] = self.RET
+        self.branch_table[JMP] = self.JMP
+        self.branch_table[JNE] = self.JNE
+        self.branch_table[JEQ] = self.JEQ
 
         self.ram = [0] * 256
         self.reg = [0] * 8
@@ -85,10 +91,10 @@ class CPU:
 
             self.FL = 0
 
-            self.FL = (self.FL ^ a < b) << 1
-            self.FL = (self.FL ^ a > b) << 1
-            self.FL = (self.FL ^ a == b) << 1
-            print(f'CMP FLAG - {self.FL} - {self.pc}')
+            self.FL = (self.FL ^ (a < b)) << 1
+            self.FL = (self.FL ^ (a > b)) << 1
+            self.FL = (self.FL ^ (a == b))
+            # print(f'CMP FLAG - {self.FL} - {self.pc}')
             return
 
 
@@ -144,21 +150,36 @@ class CPU:
         # self.trace()
         exit()
 
-    def PUSH(self, operands: tuple) ->None:
+    def PUSH(self, operands: tuple) -> None:
         self.reg[SP] -= 1
         self.ram_write(self.reg[SP], self.reg[operands[0]]) 
 
-    def POP(self, operands: tuple) ->None:
+    def POP(self, operands: tuple) -> None:
         self.reg[operands[0]] = self.ram_read(self.reg[SP])
         self.reg[SP] += 1
 
-    def CALL(self, operands: tuple) ->None:
+    def CALL(self, operands: tuple) -> None:
         self.PUSH((self.pc,))
         self.pc = operands[0]
 
-    def RET(self, operands: tuple) ->None:
+    def RET(self, operands: tuple) -> None:
         self.POP((4,))
         self.pc = self.reg[4]
+    
+    def JMP(self, operands: tuple) -> None:
+        self.pc = self.reg[operands[0]]
+
+    def JEQ(self, operands: tuple) -> None:
+        if self.FL == 1:
+            self.JMP(operands)
+        else:
+            self.pc += 2
+
+    def JNE(self, operands: tuple) -> None:
+        if self.FL != 1:
+            self.JMP(operands)
+        else:
+            self.pc += 2
 
     def run(self) -> None:
         """Run the CPU."""
@@ -170,12 +191,14 @@ class CPU:
                 operands = (self.ram_read(self.pc + 1), self.ram_read(self.pc + 2))
 
                 if (word & MASK.ALU) == MASK.ALU:
+                    # print(word, self.pc)
                     self.alu(self.alu_table[op], operands[0], operands[1])
                 elif self.branch_table.get(op):
                     self.branch_table[op](operands)
-
-                self.pc += (word >> 6) + 1
-                
+                    
+                if (word & MASK.PC) != MASK.PC:
+                    self.pc += (word >> 6) + 1 
+                    # print(self.pc)              
 
         except KeyboardInterrupt:
             self.trace()
